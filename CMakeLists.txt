@@ -16,7 +16,7 @@ include(CheckCCompilerFlag)
 check_c_compiler_flag("-std=c99" HAS_C99_FLAG)
 
 if (HAS_C99_FLAG)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -fPIC")
 else()
   message(FATAL_ERROR "Unsupported compiler - fastfilters required C99 support!")
 endif()
@@ -367,7 +367,7 @@ while( number GREATER 0 )
   math( EXPR number "${number} - 1" ) # decrement number
 endwhile( number GREATER 0 )
 
-add_library(fastfilters SHARED src/library/array.c
+add_library(fastfilters STATIC src/library/array.c
 src/library/cpu.c
 src/library/dummy.c
 src/library/fastfilters.c
@@ -399,7 +399,6 @@ endif()
 set(FF_INSTALL_DIR ${FF_INSTALL_DIR} CACHE PATH "install directory for ff python extension." FORCE)
 file(RELATIVE_PATH FF_INSTALL_DIR ${CMAKE_INSTALL_PREFIX} ${FF_INSTALL_DIR})
 
-install(TARGETS fastfilters LIBRARY DESTINATION lib)
 install(TARGETS core LIBRARY DESTINATION ${FF_INSTALL_DIR}/fastfilters/)
 install(FILES ${PROJECT_SOURCE_DIR}/src/python/__init__.py DESTINATION ${FF_INSTALL_DIR}/fastfilters/)
 
