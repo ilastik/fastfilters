@@ -15,8 +15,8 @@ source:
 
 
 build:
-  number: 1
-  string: py{{CONDA_PY}}_{{PKG_BUILDNUM}}_g{{GIT_FULL_HASH[:7]}}
+  number: 2
+  string: np{{CONDA_NPY}}py{{CONDA_PY}}_{{PKG_BUILDNUM}}_g{{GIT_FULL_HASH[:7]}}
   script_env:
     # Control building with CXX11 abi
     - DO_NOT_BUILD_WITH_CXX11_ABI  # [linux]
@@ -24,23 +24,22 @@ build:
 requirements:
   build:
     - cmake
-    - python 2.7*|3.4*|3.5*|3.6*
-    - python {{PY_VER}}*
-    - numpy {{NPY_VER}}*
+    - python {{ python }}
+    - numpy {{ numpy }}
     - nose
     - vigra
 
   run:
-    - python {{PY_VER}}*
-    - numpy {{NPY_VER}}*
     # in order to support older linux distros after gcc5 switch:
-    - libstdcxx-ng >=5.4.0  # [linux]
+    - libstdcxx-ng >={{ libstdcxxng }}  # [linux]
+    - python
+    - numpy
+
 
 test:
   requires:
-    - vigra >=1.11.0
+    - vigra >={{ vigra }}
     - nose
-    - numpy {{NPY_VER}}*
 
   source_files:
     - tests
