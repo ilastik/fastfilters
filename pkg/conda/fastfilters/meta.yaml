@@ -15,25 +15,21 @@ source:
 
 
 build:
-  number: 0
-  string: np{{CONDA_NPY}}py{{CONDA_PY}}_{{PKG_BUILDNUM}}_h{{PKG_HASH}}_g{{GIT_FULL_HASH[:7]}}
-  script_env:
-    # Control building with CXX11 abi
-    - DO_NOT_BUILD_WITH_CXX11_ABI  # [linux]
+  number: 1000
+  string: py{{CONDA_PY}}_{{PKG_BUILDNUM}}_g{{GIT_FULL_HASH[:7]}}
 
 requirements:
   build:
     - cmake
+    - {{ compiler("c") }}
+    - {{ compiler("cxx") }}
+  host:
     - python {{ python }}
-    - numpy {{ numpy }}
     - nose
-    - vigra
-
+    - vigra {{ vigra }}
   run:
-    # in order to support older linux distros after gcc5 switch:
-    - libstdcxx-ng >={{ libstdcxxng }}  # [linux]
     - python
-    - numpy
+    - numpy >=1.12
 
 
 test:
@@ -46,3 +42,13 @@ test:
 
   imports:
     - fastfilters
+
+  commands:
+    - cd tests && touch set_paths.py && nosetests  # [not win]
+    - cd tests && echo "" > set_paths.py && nosetests  # [win]
+
+about:
+  author: Sven Peter (svenpeter42)
+  home: https://github.com/svenpeter42/fastfilters
+  license: MIT
+  summary: Fast gaussian and derivative convolutional filters
