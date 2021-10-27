@@ -29,7 +29,7 @@ def test_vigra_compare_rgb():
 
     for sigma in sigmas:
         res_ff = ff.gradmag2d(a, sigma)
-        res_vigra = vigra.filters.gaussianGradientMagnitude(avigra, sigma, accumulate=False)
+        res_vigra = np.array(vigra.filters.gaussianGradientMagnitude(avigra, sigma, accumulate=False))
         print("gradmag2d ", sigma, np.max(np.abs(res_ff - res_vigra)))
 
         if not np.allclose(res_ff, res_vigra, atol=1e-6):
@@ -39,7 +39,7 @@ def test_vigra_compare_rgb():
 
     for sigma in sigmas:
         res_ff = ff.laplacian2d(a, sigma)
-        res_vigra = vigra.filters.laplacianOfGaussian(avigra, sigma)
+        res_vigra = np.array(vigra.filters.laplacianOfGaussian(avigra, sigma))
         print("laplacian2d ", sigma, np.max(np.abs(res_ff - res_vigra)))
 
         if not np.allclose(res_ff, res_vigra, atol=1e-6):
