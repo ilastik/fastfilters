@@ -6,6 +6,7 @@ include(GetGitRevisionDescription.cmake)
 git_describe(FF_VERSION --tags)
 string(SUBSTRING ${FF_VERSION} 1 -1 FF_VERSION)
 
+OPTION(WITH_OFAST "Use -Ofast optimizations \(on linux\)" OFF)
 
 set(FF_UNROLL 10)
 
@@ -43,11 +44,14 @@ elseif(HAS_O2_FLAG)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2")
 endif()
 
-if(HAS_OFAST_FLAG)
-  set(OFAST_FLAG "-Ofast")
-else()
-  set(OFAST_FLAG "")
+
+set(OFAST_FLAG "")
+if(WITH_OFAST)
+  if(HAS_OFAST_FLAG)
+     set(OFAST_FLAG "-Ofast")
+  endif()
 endif()
+
 
 check_cxx_compiler_flag("-Wall" HAS_WALL_FLAG)
 check_cxx_compiler_flag("-Wextra" HAS_WEXTRA_FLAG)
