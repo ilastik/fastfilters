@@ -24,7 +24,7 @@ requirements:
     - {{ compiler("c") }}
     - {{ compiler("cxx") }}
   host:
-    - python {{ python }}
+    - python
     - vigra {{ vigra }}
   run:
     - python
