@@ -23,6 +23,7 @@ requirements:
     - cmake
     - {{ compiler("c") }}
     - {{ compiler("cxx") }}
+    - make  # [not win]
   host:
     - python
     - vigra {{ vigra }}
