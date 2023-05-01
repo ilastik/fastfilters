@@ -11,7 +11,6 @@ OPTION(WITH_OFAST "Use -Ofast optimizations \(on linux\)" OFF)
 set(FF_UNROLL 10)
 
 add_definitions(-DFF_UNROLL=${FF_UNROLL})
-include("pybind11/tools/FindPythonLibsNew.cmake")
 
 include(CheckCCompilerFlag)
 check_c_compiler_flag("-std=c99" HAS_C99_FLAG)
@@ -32,6 +31,8 @@ int main()
 if(NOT CAN_COMPILE_C99_FEAT)
   message(FATAL_ERROR "Unsupported compiler - fastfilters requires some C99 features!")
 endif()
+
+find_package(pybind11)
 
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-Ofast" HAS_OFAST_FLAG)

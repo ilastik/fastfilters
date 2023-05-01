@@ -26,7 +26,8 @@ requirements:
     - make  # [not win]
   host:
     - python
-    - vigra {{ vigra }}
+    - vigra
+    - pybind11
   run:
     - python
     - numpy >=1.12
@@ -34,7 +35,7 @@ requirements:
 
 test:
   requires:
-    - vigra >={{ vigra }}
+    - vigra
     - nose
 
   source_files:
