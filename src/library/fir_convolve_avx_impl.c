@@ -24,7 +24,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+
+#ifdef USE_SIMDE_ON_ARM
+#include <simde/x86/avx2.h>
+#else
 #include <immintrin.h>
+#endif
 
 #ifndef __FMA__
 #define _mm256_fmadd_ps(a, b, c) (_mm256_add_ps(_mm256_mul_ps((a), (b)), (c)))

@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8.8)
+cmake_minimum_required (VERSION 3.10.0)
 project (fastfilters)
 
 include(GetGitRevisionDescription.cmake)
@@ -69,6 +69,9 @@ endif()
 
 check_cxx_compiler_flag("-std=c++14" HAS_CPP14_FLAG)
 check_cxx_compiler_flag("-std=c++11" HAS_CPP11_FLAG)
+
+
+
 
 check_cxx_compiler_flag("-mavx" HAS_AVX_FLAG)
 check_cxx_compiler_flag("-mavx2" HAS_AVX2_FLAG)
@@ -224,6 +227,11 @@ include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
 set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG}")
 
+if(USE_SIMDE_ON_ARMUSE_SIMDE_ON_ARM)
+  set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES} ${PROJECT_SOURCE_DIR}/simde")
+  set(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} -DSIMDE_ENABLE_NATIVE_ALIASES")
+endif()
+
 check_cxx_source_compiles( "#include <immintrin.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -357,7 +365,10 @@ configure_file (
 
 include_directories("${PROJECT_SOURCE_DIR}/src/library/")
 include_directories("${PROJECT_SOURCE_DIR}/include")
-include_directories("${PROJECT_SOURCE_DIR}/pybind11/include")
+if(USE_SIMDE_ON_ARM)
+  include_directories("${PROJECT_SOURCE_DIR}/simde")
+  add_definitions(-DSIMDE_ENABLE_NATIVE_ALIASES=1)
+endif()
 include_directories("${PROJECT_SOURCE_DIR}/boost-preprocessor/include")
 include_directories("${PROJECT_BINARY_DIR}")
 

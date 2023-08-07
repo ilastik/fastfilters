@@ -30,7 +30,11 @@
 #endif
 
 #ifdef HAVE_CPUIDEX
-#include <intrin.h>
+#ifdef USE_SIMDE_ON_ARM
+#include <simde/x86/avx2.h>
+#else
+#include <immintrin.h>
+#endif
 #endif
 
 #define cpuid_bit_XSAVE 0x04000000

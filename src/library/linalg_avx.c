@@ -20,7 +20,11 @@
 #include "common.h"
 #include "avx_mathfun.h"
 
+#ifdef USE_SIMDE_ON_ARM
+#include <simde/x86/avx2.h>
+#else
 #include <immintrin.h>
+#endif
 
 void DLL_LOCAL _ev2d_avx(const float *xx, const float *xy, const float *yy, float *ev_big, float *ev_small,
                          const size_t len)

@@ -31,7 +31,12 @@
 #ifndef AVX_MATHFUN_H
 #define AVX_MATHFUN_H
 
+#ifdef USE_SIMDE_ON_ARM
+#include <simde/x86/avx2.h>
+#else
 #include <immintrin.h>
+#endif
+
 #include <math.h>
 
 /* yes I know, the top of this file is quite ugly */
