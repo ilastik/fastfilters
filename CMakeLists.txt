@@ -70,40 +70,6 @@ endif()
 check_cxx_compiler_flag("-std=c++14" HAS_CPP14_FLAG)
 check_cxx_compiler_flag("-std=c++11" HAS_CPP11_FLAG)
 
-
-
-
-check_cxx_compiler_flag("-mavx" HAS_AVX_FLAG)
-check_cxx_compiler_flag("-mavx2" HAS_AVX2_FLAG)
-check_cxx_compiler_flag("-mfma" HAS_FMA_FLAG)
-
-check_cxx_compiler_flag("/arch:AVX" HAS_ARCH_AVX_FLAG)
-check_cxx_compiler_flag("/arch:AVX2" HAS_ARCH_AVX2_FLAG)
-
-if (HAS_AVX_FLAG)
-  set(AVX_FLAG "-mavx")
-elseif(HAS_ARCH_AVX_FLAG)
-  set(AVX_FLAG "/arch:AVX -D__AVX__=1")
-else()
-  set(AVX_FLAG "")
-endif()
-
-if (HAS_AVX2_FLAG)
-  set(AVX2_FLAG "-mavx2")
-elseif(HAS_ARCH_AVX2_FLAG)
-  set(AVX2_FLAG "/arch:AVX2 -D__AVX__=1 -D__FMA__=1 -D__AVX2__=1")
-else()
-  set(AVX2_FLAG "")
-endif()
-
-if (HAS_FMA_FLAG)
-  set(FMA_FLAG "-mfma")
-elseif(HAS_ARCH_AVX2_FLAG)
-  set(FMA_FLAG "/arch:AVX -D__AVX__=1 -D__FMA__=1")
-else()
-  set(FMA_FLAG "")
-endif()
-
 if (HAS_CPP14_FLAG)
   set(PYBIND11_CPP_STANDARD -std=c++14)
 elseif (HAS_CPP11_FLAG)
@@ -113,6 +79,49 @@ else()
     message(FATAL_ERROR "Unsupported compiler -- pybind11 requires C++11 support!")
   endif()
 endif()
+
+if (USE_SIMDE_ON_ARM)
+  set(HAS_AVX_FLAG "1")
+  set(HAS_AVX2_FLAG "1")
+  set(HAS_FMA_FLAG "1")
+  set(HAS_ARCH_AVX_FLAG "1")
+  set(HAS_ARCH_AVX2_FLAG "1")
+  set(AVX_FLAG "-D__AVX__=1")
+  set(AVX2_FLAG "-D__AVX__=1 -D__FMA__=1 -D__AVX2__=1")
+  set(FMA_FLAG "-D__AVX__=1 -D__FMA__=1")
+else()
+  check_cxx_compiler_flag("-mavx" HAS_AVX_FLAG)
+  check_cxx_compiler_flag("-mavx2" HAS_AVX2_FLAG)
+  check_cxx_compiler_flag("-mfma" HAS_FMA_FLAG)
+
+  check_cxx_compiler_flag("/arch:AVX" HAS_ARCH_AVX_FLAG)
+  check_cxx_compiler_flag("/arch:AVX2" HAS_ARCH_AVX2_FLAG)
+
+  if (HAS_AVX_FLAG)
+    set(AVX_FLAG "-mavx")
+  elseif(HAS_ARCH_AVX_FLAG)
+    set(AVX_FLAG "/arch:AVX -D__AVX__=1")
+  else()
+    set(AVX_FLAG "")
+  endif()
+
+  if (HAS_AVX2_FLAG)
+    set(AVX2_FLAG "-mavx2")
+  elseif(HAS_ARCH_AVX2_FLAG)
+    set(AVX2_FLAG "/arch:AVX2 -D__AVX__=1 -D__FMA__=1 -D__AVX2__=1")
+  else()
+    set(AVX2_FLAG "")
+  endif()
+
+  if (HAS_FMA_FLAG)
+    set(FMA_FLAG "-mfma")
+  elseif(HAS_ARCH_AVX2_FLAG)
+    set(FMA_FLAG "/arch:AVX -D__AVX__=1 -D__FMA__=1")
+  else()
+    set(FMA_FLAG "")
+  endif()
+endif()
+
 set(PYBIND11_CPP_STANDARD ${PYBIND11_CPP_STANDARD} CACHE STRING
     "C++ standard flag, e.g. -std=c++11 or -std=c++14. Defaults to latest available.")
 
@@ -224,14 +233,14 @@ endfunction()
 
 include(CheckCXXSourceCompiles)
 
-set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG}")
 
 if(USE_SIMDE_ON_ARMUSE_SIMDE_ON_ARM)
   set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES} ${PROJECT_SOURCE_DIR}/simde")
   set(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} -DSIMDE_ENABLE_NATIVE_ALIASES")
 endif()
 
+set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
+set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG}")
 check_cxx_source_compiles( "#include <immintrin.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -249,7 +258,6 @@ set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
 
 set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
 set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG} ${FMA_FLAG}")
-
 check_cxx_source_compiles( "#include <immintrin.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -267,7 +275,6 @@ set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
 
 set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
 set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX2_FLAG}")
-
 check_cxx_source_compiles( "
     #include <immintrin.h>
     #include <stdlib.h>
@@ -372,48 +379,55 @@ endif()
 include_directories("${PROJECT_SOURCE_DIR}/boost-preprocessor/include")
 include_directories("${PROJECT_BINARY_DIR}")
 
-configure_file(${PROJECT_SOURCE_DIR}/src/library/linalg_avx2.c ${PROJECT_BINARY_DIR}/linalg_avx2.avx.c COPYONLY)
-configure_file(${PROJECT_SOURCE_DIR}/src/library/linalg_avx2.c ${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c COPYONLY)
+if (NOT USE_SIMDE_ON_ARM)
+  configure_file(${PROJECT_SOURCE_DIR}/src/library/linalg_avx2.c ${PROJECT_BINARY_DIR}/linalg_avx2.avx.c COPYONLY)
+  set_source_files_properties(${PROJECT_BINARY_DIR}/linalg_avx2.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
+  configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c COPYONLY)
+  set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
+endif()
 
+configure_file(${PROJECT_SOURCE_DIR}/src/library/linalg_avx2.c ${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c COPYONLY)
 set_source_files_properties(${PROJECT_SOURCE_DIR}/src/library/linalg_avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
-set_source_files_properties(${PROJECT_BINARY_DIR}/linalg_avx2.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
 set_source_files_properties(${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c PROPERTIES COMPILE_FLAGS "${AVX2_FLAG} ${OFAST_FLAG}")
 
-configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c COPYONLY)
 configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avxfma.c COPYONLY)
-
-set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
 set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx.avxfma.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${FMA_FLAG} ${OFAST_FLAG}")
 
 set(number ${FF_UNROLL})
 set(copied_files "")
 while( number GREATER 0 )
-  configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx_impl.c ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c COPYONLY)
-  set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG} -DFF_KERNEL_LEN=${number}")
-
   configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx_impl.c ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avxfma.c COPYONLY)
   set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avxfma.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG} ${FMA_FLAG} -DFF_KERNEL_LEN=${number}")
+  set(copied_files ${copied_files} ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avxfma.c)
 
-  set(copied_files ${copied_files} ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avxfma.c)
-
+  if (NOT USE_SIMDE_ON_ARM)
+    configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx_impl.c ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c COPYONLY)
+    set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG} -DFF_KERNEL_LEN=${number}")
+    set(copied_files ${copied_files} ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c)
+  endif()
   math( EXPR number "${number} - 1" ) # decrement number
 endwhile( number GREATER 0 )
 
+# exclude the avx versions for ARM builds, there we only need the avx ones.
+set(avx_files ${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avxfma.c)
+if (NOT USE_SIMDE_ON_ARM)
+  set(avx_files ${avx_files} ${PROJECT_BINARY_DIR}/linalg_avx2.avx.c src/library/linalg_avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c)
+  configure_file(${PROJECT_SOURCE_DIR}/src/library/cpu_intel.c ${PROJECT_BINARY_DIR}/cpu.c COPYONLY)
+else()
+  configure_file(${PROJECT_SOURCE_DIR}/src/library/cpu_arm.c ${PROJECT_BINARY_DIR}/cpu.c COPYONLY)
+endif()
+
 add_library(fastfilters SHARED src/library/array.c
-src/library/cpu.c
+${PROJECT_BINARY_DIR}/cpu.c
 src/library/dummy.c
 src/library/fastfilters.c
 src/library/fir_convolve.c
 src/library/fir_convolve_nosimd.c
 src/library/fir_filters.c
 src/library/fir_kernel.c
-${PROJECT_BINARY_DIR}/linalg_avx2.avx.c
-${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c
-src/library/linalg_avx.c
 src/library/linalg.c
 src/library/memory.c
-${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c
-${PROJECT_BINARY_DIR}/fir_convolve_avx.avxfma.c
+${avx_files}
 ${copied_files})
 
 target_compile_definitions(fastfilters PRIVATE FASTFILTERS_SHARED_LIBRARY)
