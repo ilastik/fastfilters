@@ -30,7 +30,7 @@
 #endif
 
 #ifdef HAVE_CPUIDEX
-#ifdef USE_SIMDE_ON_ARM
+#ifdef _USE_SIMDE_ON_ARM_
 #include <simde/x86/avx2.h>
 #else
 #include <immintrin.h>

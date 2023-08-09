@@ -20,8 +20,8 @@
 #include "common.h"
 #include "avx_mathfun.h"
 
-#ifdef USE_SIMDE_ON_ARM
-#include <simde/x86/avx2.h>
+#ifdef _USE_SIMDE_ON_ARM_
+#include <simde/x86/avx512.h>
 #else
 #include <immintrin.h>
 #endif

@@ -19,12 +19,16 @@
 #ifndef FIR_CONVOLVE_AVX_COMMON_H
 #define FIR_CONVOLVE_AVX_COMMON_H
 
+#ifndef _USE_SIMDE_ON_ARM_
 #if defined(__AVX__) && defined(__FMA__)
 #define param_avxfma 1
 #elif defined(__AVX__)
 #define param_avxfma 0
 #else
 #error "fir_convolve_avx*.c need to be compiled with AVX support."
+#endif
+#else
+#define param_avxfma 1
 #endif
 
 #include <boost/preprocessor/library.hpp>

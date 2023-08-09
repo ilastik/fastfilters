@@ -53,6 +53,9 @@ if(WITH_OFAST)
   endif()
 endif()
 
+if (APPLE_ARM64)
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -mfloat-abi=hard")
+endif()
 
 check_cxx_compiler_flag("-Wall" HAS_WALL_FLAG)
 check_cxx_compiler_flag("-Wextra" HAS_WEXTRA_FLAG)
@@ -89,6 +92,8 @@ if (USE_SIMDE_ON_ARM)
   set(AVX_FLAG "-D__AVX__=1")
   set(AVX2_FLAG "-D__AVX__=1 -D__FMA__=1 -D__AVX2__=1")
   set(FMA_FLAG "-D__AVX__=1 -D__FMA__=1")
+  add_definitions(-D_USE_SIMDE_ON_ARM_)
+
 else()
   check_cxx_compiler_flag("-mavx" HAS_AVX_FLAG)
   check_cxx_compiler_flag("-mavx2" HAS_AVX2_FLAG)
@@ -233,127 +238,135 @@ endfunction()
 
 include(CheckCXXSourceCompiles)
 
-
-if(USE_SIMDE_ON_ARMUSE_SIMDE_ON_ARM)
+if(USE_SIMDE_ON_ARM)
+  # currently this has no effect, as all the checks, like check_cxx_source_compiles
+  # are not run for targets that use SIMDE
   set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES} ${PROJECT_SOURCE_DIR}/simde")
   set(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} -DSIMDE_ENABLE_NATIVE_ALIASES")
 endif()
 
-set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG}")
-check_cxx_source_compiles( "#include <immintrin.h>
-#include <stdlib.h>
-#include <stdio.h>
-int main()
-{
-    __m256 a = _mm256_set1_ps(rand());
-    __m256 b = _mm256_set1_ps(rand());
-    b = _mm256_add_ps(a, b);
-    float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
-    printf(\"%f\", result);
-    return 0;
-} " CAN_COMPILE_AVX)
 
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
+if (NOT USE_SIMDE_ON_ARM)
 
-set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG} ${FMA_FLAG}")
-check_cxx_source_compiles( "#include <immintrin.h>
-#include <stdlib.h>
-#include <stdio.h>
-int main()
-{
-    __m256 a = _mm256_set1_ps(rand());
-    __m256 b = _mm256_set1_ps(rand());
-    b = _mm256_fmadd_ps(a, a, b);
-    float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
-    printf(\"%f\", result);
-    return 0;
-} " CAN_COMPILE_FMA)
+  set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG}")
+  check_cxx_source_compiles( "#include <immintrin.h>
+  #include <stdlib.h>
+  #include <stdio.h>
+  int main()
+  {
+      __m256 a = _mm256_set1_ps(rand());
+      __m256 b = _mm256_set1_ps(rand());
+      b = _mm256_add_ps(a, b);
+      float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
+      printf(\"%f\", result);
+      return 0;
+  } " CAN_COMPILE_AVX)
 
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
 
-set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX2_FLAG}")
-check_cxx_source_compiles( "
-    #include <immintrin.h>
-    #include <stdlib.h>
-    #include <stdio.h>
-    int main()
-    {
-    float test = 1.0;
-    __m128 a = _mm_setzero_ps();
-    __m256 b = _mm256_broadcastss_ps(a);
-    float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
-    printf(\"%f\", result);
-    return 0;
-    }" CAN_COMPILE_AVX2)
+  set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG} ${FMA_FLAG}")
+  check_cxx_source_compiles( "#include <immintrin.h>
+  #include <stdlib.h>
+  #include <stdio.h>
+  int main()
+  {
+      __m256 a = _mm256_set1_ps(rand());
+      __m256 b = _mm256_set1_ps(rand());
+      b = _mm256_fmadd_ps(a, a, b);
+      float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
+      printf(\"%f\", result);
+      return 0;
+  } " CAN_COMPILE_FMA)
 
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
 
-function(check_cpu_supports flagname defname)
-    check_cxx_source_compiles( "#include <stdio.h> \n int main() { return __builtin_cpu_supports(\"${flagname}\"); }" ${defname})
-endfunction()
+  set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX2_FLAG}")
+  check_cxx_source_compiles( "
+      #include <immintrin.h>
+      #include <stdlib.h>
+      #include <stdio.h>
+      int main()
+      {
+      float test = 1.0;
+      __m128 a = _mm_setzero_ps();
+      __m256 b = _mm256_broadcastss_ps(a);
+      float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
+      printf(\"%f\", result);
+      return 0;
+      }" CAN_COMPILE_AVX2)
 
-check_cpu_supports("avx" "HAVE_GNU_CPU_SUPPORTS_AVX")
-check_cpu_supports("avx2" "HAVE_GNU_CPU_SUPPORTS_AVX2")
-check_cpu_supports("fma" "HAVE_GNU_CPU_SUPPORTS_FMA")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
 
+  function(check_cpu_supports flagname defname)
+      check_cxx_source_compiles( "#include <stdio.h> \n int main() { return __builtin_cpu_supports(\"${flagname}\"); }" ${defname})
+  endfunction()
 
-check_cxx_source_compiles( "
-    #include <stdio.h>
-    int main()
-    {
-        unsigned int a, b, c, d;
-
-        a = 1;
-        c = 0;
-        __asm__ __volatile__ (\"cpuid\" : \"+a\"(a), \"+b\"(b), \"+c\"(c), \"=d\"(d));
-        return a;
-    }" HAVE_ASM_CPUID)
-
-check_cxx_source_compiles("
-    #include <stdio.h>
-    #include <intrin.h>
-    int main()
-    {
-        int cpuid[4];
-        __cpuidex(cpuid, 7, 0);
-        return cpuid[0];
-    }" HAVE_CPUIDEX)
-
-check_cxx_source_compiles("
-    #include <stdio.h>
-    #include <intrin.h>
-    int main()
-    {
-        unsigned int xcr0 = _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
-        return xcr0;
-    }" HAVE_INTRIN_XGETBV)
+  check_cpu_supports("avx" "HAVE_GNU_CPU_SUPPORTS_AVX")
+  check_cpu_supports("avx2" "HAVE_GNU_CPU_SUPPORTS_AVX2")
+  check_cpu_supports("fma" "HAVE_GNU_CPU_SUPPORTS_FMA")
 
 
+  check_cxx_source_compiles( "
+      #include <stdio.h>
+      int main()
+      {
+          unsigned int a, b, c, d;
 
-check_cxx_source_compiles( "
-    #include <stdio.h>
-    int main()
-    {
-        unsigned int a, b, c;
+          a = 1;
+          c = 0;
+          __asm__ __volatile__ (\"cpuid\" : \"+a\"(a), \"+b\"(b), \"+c\"(c), \"=d\"(d));
+          return a;
+      }" HAVE_ASM_CPUID)
 
-        c = 0;
-        __asm__ __volatile__(\"xgetbv\" : \"=a\"(a), \"=d\"(b) : \"c\"(c));
-        return a;
-    }" HAVE_ASM_XGETBV)
+  check_cxx_source_compiles("
+      #include <stdio.h>
+      #include <intrin.h>
+      int main()
+      {
+          int cpuid[4];
+          __cpuidex(cpuid, 7, 0);
+          return cpuid[0];
+      }" HAVE_CPUIDEX)
 
-check_cxx_source_compiles( "
-        #include <stdbool.h>
-        int main(int argc, char *argv[])
-        {
-            (void)argv;
-            return __builtin_expect(argc > 2, false);
-        }" HAVE_BUILTIN_EXPECT)
+  check_cxx_source_compiles("
+      #include <stdio.h>
+      #include <intrin.h>
+      int main()
+      {
+          unsigned int xcr0 = _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
+          return xcr0;
+      }" HAVE_INTRIN_XGETBV)
 
-include(CheckIncludeFiles)
-check_include_files(cpuid.h HAVE_CPUID_H)
+  check_cxx_source_compiles( "
+      #include <stdio.h>
+      int main()
+      {
+          unsigned int a, b, c;
+
+          c = 0;
+          __asm__ __volatile__(\"xgetbv\" : \"=a\"(a), \"=d\"(b) : \"c\"(c));
+          return a;
+      }" HAVE_ASM_XGETBV)
+
+  check_cxx_source_compiles( "
+          #include <stdbool.h>
+          int main(int argc, char *argv[])
+          {
+              (void)argv;
+              return __builtin_expect(argc > 2, false);
+          }" HAVE_BUILTIN_EXPECT)
+
+  include(CheckIncludeFiles)
+  check_include_files(cpuid.h HAVE_CPUID_H)
+else()
+  set(CAN_COMPILE_AVX "1")
+  set(CAN_COMPILE_FMA "1")
+  set(CAN_COMPILE_AVX2 "1")
+endif()
+
 
 if(NOT CAN_COMPILE_AVX)
     message( FATAL_ERROR "Compiler cannot emit avx instructions.")
@@ -425,6 +438,7 @@ src/library/fir_convolve.c
 src/library/fir_convolve_nosimd.c
 src/library/fir_filters.c
 src/library/fir_kernel.c
+src/library/linalg_avx.c
 src/library/linalg.c
 src/library/memory.c
 ${avx_files}
