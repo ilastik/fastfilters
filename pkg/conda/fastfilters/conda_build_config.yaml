@@ -1,5 +1,4 @@
 python:
-  - 3.7  # [not (osx and arm64)]
   - 3.8
   - 3.9
   - 3.10
