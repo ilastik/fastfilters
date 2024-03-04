@@ -28,17 +28,26 @@
 
   (this is the zlib license)
 */
-
 #ifndef AVX_MATHFUN_H
 #define AVX_MATHFUN_H
 
+#ifdef _USE_SIMDE_ON_ARM_
+#include <simde/x86/avx512.h>
+#else
 #include <immintrin.h>
+#endif
+
 #include <math.h>
 
 /* yes I know, the top of this file is quite ugly */
+#ifdef _MSC_VER
+#define ALIGN32_BEG __declspec(align(32))
+#define ALIGN32_END
+#define __attribute__(X)
+#else
 #define ALIGN32_BEG
 #define ALIGN32_END __attribute__((aligned(32)))
-
+#endif
 /* __m128 is ugly to write */
 typedef __m256 v8sf;  // vector of 8 float (avx)
 typedef __m256i v8si; // vector of 8 int   (avx)
@@ -89,6 +98,10 @@ _PS256_CONST(cephes_log_p8, +3.3333331174E-1);
 _PS256_CONST(cephes_log_q1, -2.12194440e-4);
 _PS256_CONST(cephes_log_q2, 0.693359375);
 
+#ifdef _USE_SIMDE_ON_ARM_
+#define __shifty 23
+#endif
+
 #ifndef __AVX2__
 
 typedef union imm_xmm_union {
@@ -112,6 +125,20 @@ typedef union imm_xmm_union {
         imm_ = u.imm;                                                                                                  \
     }
 
+#ifdef _USE_SIMDE_ON_ARM_
+#define AVX2_BITOP_USING_SSE2(fn)                                                                                      \
+    static inline v8si my_mm256_##fn(const v8si x)                                                                     \
+    {                                                                                                                  \
+        /* use SSE2 instruction to perform the bitop AVX2 */                                                           \
+        v4si x1, x2;                                                                                                   \
+        v8si ret;                                                                                                      \
+        COPY_IMM_TO_XMM(x, x1, x2);                                                                                    \
+        x1 = _mm_##fn(x1, __shifty);                                                                                   \
+        x2 = _mm_##fn(x2, __shifty);                                                                                   \
+        COPY_XMM_TO_IMM(x1, x2, ret);                                                                                  \
+        return (ret);                                                                                                  \
+    }
+#else  /* _USE_SIMDE_ON_ARM_ */
 #define AVX2_BITOP_USING_SSE2(fn)                                                                                      \
     static inline v8si my_mm256_##fn(v8si x, int a)                                                                    \
     {                                                                                                                  \
@@ -124,6 +151,7 @@ typedef union imm_xmm_union {
         COPY_XMM_TO_IMM(x1, x2, ret);                                                                                  \
         return (ret);                                                                                                  \
     }
+#endif  /* _USE_SIMDE_ON_ARM_ */
 
 //#warning "Using SSE2 to perform AVX2 bitshift ops"
 AVX2_BITOP_USING_SSE2(slli_epi32)
@@ -151,11 +179,20 @@ AVX2_INTOP_USING_SSE2(add_epi32)
 
 #else
 
+#ifdef _USE_SIMDE_ON_ARM_
+#define AVX2_BITOP_ALIAS(fn)                                                                                           \
+    static inline v8si my_mm256_##fn(const v8si x)                                                                     \
+    {                                                                                                                  \
+        return _mm256_##fn(x, __shifty);                                                                               \
+    }
+#else  /* _USE_SIMDE_ON_ARM_ */
 #define AVX2_BITOP_ALIAS(fn)                                                                                           \
     static inline v8si my_mm256_##fn(v8si x, int a)                                                                    \
     {                                                                                                                  \
         return _mm256_##fn(x, a);                                                                                      \
     }
+#endif  /* _USE_SIMDE_ON_ARM_ */
+
 #define AVX2_INTOP_ALIAS(fn)                                                                                           \
     static inline v8si my_mm256_##fn(v8si x, v8si y)                                                                   \
     {                                                                                                                  \
@@ -185,7 +222,11 @@ static inline v8sf log256_ps(v8sf x)
     x = _mm256_max_ps(x, *(v8sf *)_ps256_min_norm_pos); /* cut off denormalized stuff */
 
     // can be done with AVX2
+    #ifdef _USE_SIMDE_ON_ARM_
+    imm0 = my_mm256_srli_epi32(_mm256_castps_si256(x));
+    #else
     imm0 = my_mm256_srli_epi32(_mm256_castps_si256(x), 23);
+    #endif
 
     /* keep only the fractional part */
     x = _mm256_and_ps(x, *(v8sf *)_ps256_inv_mant_mask);
@@ -311,7 +352,11 @@ static inline v8sf exp256_ps(v8sf x)
     imm0 = _mm256_cvttps_epi32(fx);
     // another two AVX2 instructions
     imm0 = my_mm256_add_epi32(imm0, *(v8si *)_pi32_256_0x7f);
+#ifdef _USE_SIMDE_ON_ARM_
+    imm0 = my_mm256_slli_epi32(imm0);
+#else
     imm0 = my_mm256_slli_epi32(imm0, 23);
+#endif
     v8sf pow2n = _mm256_castsi256_ps(imm0);
     y = _mm256_mul_ps(y, pow2n);
     return y;
@@ -778,6 +823,50 @@ Author : Naoki Shibata
 
 Main download page : http://shibatch.sourceforge.net/
 */
+static inline __m256 _avx_neg(__m256 x)
+{
+#ifdef _MSC_VER  
+    return _mm256_sub_ps(_mm256_setzero_ps(), x);
+#else
+    return -x;
+#endif
+}
+
+static inline __m256 _avx_sub(__m256 a, __m256 b)
+{
+#ifdef _MSC_VER  
+    return _mm256_sub_ps(a, b);
+#else
+    return a - b;
+#endif
+}
+
+static inline __m256 _avx_add(__m256 a, __m256 b)
+{
+#ifdef _MSC_VER  
+    return _mm256_add_ps(a, b);
+#else
+    return a + b;
+#endif
+}
+
+static inline void _avx_iadd(__m256 *a, __m256 b)
+{
+#ifdef _MSC_VER  
+    *a = _mm256_add_ps(*a, b);
+#else
+    *a += b;
+#endif
+}
+
+static inline __m256 _avx_mul(__m256 a, __m256 b)
+{
+#ifdef _MSC_VER  
+    return _mm256_mul_ps(a, b);
+#else
+    return a * b;
+#endif
+}
 
 static inline __m256 atan2_256_ps(__m256 y, __m256 x)
 {
@@ -795,12 +884,12 @@ static inline __m256 atan2_256_ps(__m256 y, __m256 x)
     __m256 mask = _mm256_cmp_ps(y, x, _CMP_GT_OS);
 
     x = _mm256_blendv_ps(x0, y0, mask);
-    y = _mm256_blendv_ps(y0, -x0, mask);
+    //y = _mm256_blendv_ps(y0, -x0, mask);
+    y = _mm256_blendv_ps(y0, _avx_neg(x0), mask);
+    _avx_iadd(&q, _mm256_blendv_ps(_mm256_setzero_ps(), _PS256_GET_CONST(one), mask));
 
-    q += _mm256_blendv_ps(_mm256_setzero_ps(), _PS256_GET_CONST(one), mask);
-
-    __m256 s = y / x;
-    __m256 t = s * s;
+    __m256 s = _mm256_div_ps(y, x);
+    __m256 t = _mm256_mul_ps(s, s);
 
     __m256 u = _PS256_GET_CONST(atan2_c0);
 
@@ -812,7 +901,7 @@ static inline __m256 atan2_256_ps(__m256 y, __m256 x)
     u = _avxfun_fmadd(t, u, _PS256_GET_CONST(atan2_c6));
     u = _avxfun_fmadd(t, u, _PS256_GET_CONST(atan2_c7));
 
-    t = _avxfun_fmadd(t * s, u, s);
+    t = _avxfun_fmadd(_mm256_mul_ps(t, s), u, s);
     t = _avxfun_fmadd(q, _PS256_GET_CONST(atan2_mpi2), t);
 
     t = _mm256_xor_ps(t, sign_bit_x);

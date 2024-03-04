@@ -11,8 +11,8 @@ package:
   version: {{tagged_version}}
 
 source:
-  git_url: https://github.com/svenpeter42/fastfilters
-  git_tag: v0.2.4
+  path: ../../../
+
 
 build:
   number: 0
@@ -20,20 +20,36 @@ build:
 
 requirements:
   build:
-    - gcc 4.8.5 # [unix]
-    - python 2.7*|3.4*|3.5*
-    - python {{PY_VER}}*
-    - binutils
-    - numpy
-
+    - cmake
+    - {{ compiler("c") }}
+    - {{ compiler("cxx") }}
+    - make  # [not win]
+  host:
+    - python
+    - vigra
+    - pybind11
   run:
-    - libgcc 4.8* # [unix]
-    - python {{PY_VER}}*
-    - numpy
+    - python
+    - numpy >=1.12
+
 
 test:
   requires:
-    - vigra >=1.11.0
+    - vigra
+    - nose
+
+  source_files:
+    - tests
 
   imports:
     - fastfilters
+
+  commands:
+    - cd tests && touch set_paths.py && nosetests  # [not win]
+    - cd tests && echo "" > set_paths.py && nosetests  # [win]
+
+about:
+  author: Sven Peter (svenpeter42)
+  home: https://github.com/svenpeter42/fastfilters
+  license: MIT
+  summary: Fast gaussian and derivative convolutional filters

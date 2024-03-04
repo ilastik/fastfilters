@@ -20,7 +20,11 @@
 #include "common.h"
 #include "avx_mathfun.h"
 
+#ifdef _USE_SIMDE_ON_ARM_
+#include <simde/x86/avx512.h>
+#else
 #include <immintrin.h>
+#endif
 
 static inline void swap(float *a, float *b)
 {
@@ -29,6 +33,17 @@ static inline void swap(float *a, float *b)
     *b = tmp;
 }
 
+static inline float max(float a, float b)
+{
+    if (a > b)
+        return a;
+    else
+        return b;
+}
+
+#ifdef _USE_SIMDE_ON_ARM_
+#define fname _ev3d_avx2
+#else
 #ifdef __AVX2__
 #define fname _ev3d_avx2
 #elif defined(__AVX__)
@@ -36,6 +51,14 @@ static inline void swap(float *a, float *b)
 #else
 #error "linalg_avx2.c needs to be compiled with avx or avx2 support"
 #endif
+#endif
+
+static inline __m256 _mm256_abs_ps(__m256 x)
+{
+    __m256 m = _mm256_set1_ps(-0.f);
+    return _mm256_andnot_ps(m, x);
+}
+
 
 DLL_LOCAL void fname(const float *a00, const float *a01, const float *a02, const float *a11, const float *a12,
                      const float *a22, float *ev0, float *ev1, float *ev2, const size_t len)
@@ -44,6 +67,7 @@ DLL_LOCAL void fname(const float *a00, const float *a01, const float *a02, const
     __m256 v_inv3 = _mm256_set1_ps(1.0 / 3.0);
     __m256 v_root3 = _mm256_sqrt_ps(_mm256_set1_ps(3.0));
     __m256 two = _mm256_set1_ps(2.0);
+    __m256 one = _mm256_set1_ps(1.0);
     __m256 half = _mm256_set1_ps(0.5);
     __m256 zero = _mm256_setzero_ps();
 
@@ -55,29 +79,53 @@ DLL_LOCAL void fname(const float *a00, const float *a01, const float *a02, const
         __m256 v_a12 = _mm256_loadu_ps(a12 + i);
         __m256 v_a22 = _mm256_loadu_ps(a22 + i);
 
-        __m256 c0 = v_a00 * v_a11 * v_a22 + two * v_a01 * v_a02 * v_a12 - v_a00 * v_a12 * v_a12 -
-                    v_a11 * v_a02 * v_a02 - v_a22 * v_a01 * v_a01;
-        __m256 c1 = v_a00 * v_a11 - v_a01 * v_a01 + v_a00 * v_a22 - v_a02 * v_a02 + v_a11 * v_a22 - v_a12 * v_a12;
-        __m256 c2 = v_a00 + v_a11 + v_a22;
-        __m256 c2Div3 = c2 * v_inv3;
-        __m256 aDiv3 = (c1 - c2 * c2Div3) * v_inv3;
+        // guard against float overflows
+        __m256 v_max0 = _mm256_max_ps(_mm256_abs_ps(v_a00), _mm256_abs_ps(v_a01));
+        __m256 v_max1 = _mm256_max_ps(_mm256_abs_ps(v_a02), _mm256_abs_ps(v_a11));
+        __m256 v_max2 = _mm256_max_ps(_mm256_abs_ps(v_a12), _mm256_abs_ps(v_a22));
+        __m256 v_max_element = _mm256_max_ps(_mm256_max_ps(v_max0, v_max1), v_max2);
+
+        // replace zeros with ones to avoid NaNs
+        v_max_element = _mm256_or_ps(v_max_element, _mm256_and_ps(one, _mm256_cmp_ps(v_max_element, zero, _CMP_EQ_UQ)));
+
+        v_a00 = _mm256_div_ps(v_a00, v_max_element);
+        v_a01 = _mm256_div_ps(v_a01, v_max_element);
+        v_a02 = _mm256_div_ps(v_a02, v_max_element);
+        v_a11 = _mm256_div_ps(v_a11, v_max_element);
+        v_a12 = _mm256_div_ps(v_a12, v_max_element);
+        v_a22 = _mm256_div_ps(v_a22, v_max_element);
+
+        __m256 c0 = _avx_sub(_avx_sub(_avx_sub(_avx_add(_avx_mul(_avx_mul(v_a00, v_a11), v_a22),
+            _avx_mul(_avx_mul(_avx_mul(two, v_a01), v_a02), v_a12)),
+            _avx_mul(_avx_mul(v_a00, v_a12), v_a12)),
+            _avx_mul(_avx_mul(v_a11, v_a02), v_a02)),
+            _avx_mul(_avx_mul(v_a22, v_a01), v_a01));
+        __m256 c1 = _avx_sub(_avx_add(_avx_sub(_avx_add(_avx_sub(_avx_mul(v_a00, v_a11),
+            _avx_mul(v_a01, v_a01)),
+            _avx_mul(v_a00, v_a22)),
+            _avx_mul(v_a02, v_a02)),
+            _avx_mul(v_a11, v_a22)),
+            _avx_mul(v_a12, v_a12));
+        __m256 c2 = _avx_add(_avx_add(v_a00, v_a11), v_a22);
+        __m256 c2Div3 = _avx_mul(c2, v_inv3);
+        __m256 aDiv3 = _avx_mul(_avx_sub(c1, _avx_mul(c2, c2Div3)), v_inv3);
 
         aDiv3 = _mm256_min_ps(aDiv3, zero);
 
-        __m256 mbDiv2 = half * (c0 + c2Div3 * (two * c2Div3 * c2Div3 - c1));
-        __m256 q = mbDiv2 * mbDiv2 + aDiv3 * aDiv3 * aDiv3;
+        __m256 mbDiv2 = _avx_mul(half, _avx_add(c0, _avx_mul(c2Div3, _avx_sub(_avx_mul(_avx_mul(two, c2Div3), c2Div3), c1))));
+        __m256 q = _avx_add(_avx_mul(mbDiv2, mbDiv2), _avx_mul(_avx_mul(aDiv3, aDiv3), aDiv3));
 
         q = _mm256_min_ps(q, zero);
 
-        __m256 magnitude = _mm256_sqrt_ps(-aDiv3);
-        __m256 angle = atan2_256_ps(_mm256_sqrt_ps(-q), mbDiv2) * v_inv3;
+        __m256 magnitude = _mm256_sqrt_ps(_avx_neg(aDiv3));
+        __m256 angle = _avx_mul(atan2_256_ps(_mm256_sqrt_ps(_avx_neg(q)), mbDiv2), v_inv3);
         __m256 cs, sn;
 
         sincos256_ps(angle, &sn, &cs);
 
-        __m256 r0 = (c2Div3 + two * magnitude * cs);
-        __m256 r1 = (c2Div3 - magnitude * (cs + v_root3 * sn));
-        __m256 r2 = (c2Div3 - magnitude * (cs - v_root3 * sn));
+        __m256 r0 = _avx_add(c2Div3, _avx_mul(_avx_mul(two, magnitude), cs));
+        __m256 r1 = _avx_sub(c2Div3, _avx_mul(magnitude, _avx_add(cs, _avx_mul(v_root3, sn))));
+        __m256 r2 = _avx_sub(c2Div3, _avx_mul(magnitude, _avx_sub(cs, _avx_mul(v_root3, sn))));
 
         __m256 v_r0_tmp = _mm256_min_ps(r0, r1);
         __m256 v_r1_tmp = _mm256_max_ps(r0, r1);
@@ -88,20 +136,51 @@ DLL_LOCAL void fname(const float *a00, const float *a01, const float *a02, const
         __m256 v_r1 = _mm256_min_ps(v_r1_tmp, v_r2_tmp);
         __m256 v_r2 = _mm256_max_ps(v_r1_tmp, v_r2_tmp);
 
+        v_r0 = _mm256_mul_ps(v_r0, v_max_element);
+        v_r1 = _mm256_mul_ps(v_r1, v_max_element);
+        v_r2 = _mm256_mul_ps(v_r2, v_max_element);
+
         _mm256_storeu_ps(ev2 + i, v_r0);
         _mm256_storeu_ps(ev1 + i, v_r1);
         _mm256_storeu_ps(ev0 + i, v_r2);
     }
 
+    const float inv3 = 1.0 / 3.0;
+    const float root3 = sqrt(3.0);
     for (size_t i = avx_end; i < len; ++i) {
-        float inv3 = 1.0 / 3.0;
-        float root3 = sqrt(3.0);
+        float i_a00 = a00[i];
+        float i_a01 = a01[i];
+        float i_a02 = a02[i];
+        float i_a11 = a11[i];
+        float i_a12 = a12[i];
+        float i_a22 = a22[i];
 
-        float c0 = a00[i] * a11[i] * a22[i] + 2.0 * a01[i] * a02[i] * a12[i] - a00[i] * a12[i] * a12[i] -
-                   a11[i] * a02[i] * a02[i] - a22[i] * a01[i] * a01[i];
+        // guard against float overflows
+        float max0 = max(fabs(i_a00), fabs(i_a01));
+        float max1 = max(fabs(i_a02), fabs(i_a11));
+        float max2 = max(fabs(i_a12), fabs(i_a22));
+        float maxElement = max(max(max0, max1), max2);
+
+        if (maxElement == 0) {
+            ev0[i] = 0;
+            ev1[i] = 0;
+            ev2[i] = 0;
+            continue;
+        }
+
+        float invMaxElement = 1/maxElement;
+        i_a00 *= invMaxElement;
+        i_a01 *= invMaxElement;
+        i_a02 *= invMaxElement;
+        i_a11 *= invMaxElement;
+        i_a12 *= invMaxElement;
+        i_a22 *= invMaxElement;
+
+        float c0 = i_a00 * i_a11 * i_a22 + 2.0 * i_a01 * i_a02 * i_a12 - i_a00 * i_a12 * i_a12 -
+                   i_a11 * i_a02 * i_a02 - i_a22 * i_a01 * i_a01;
         float c1 =
-            a00[i] * a11[i] - a01[i] * a01[i] + a00[i] * a22[i] - a02[i] * a02[i] + a11[i] * a22[i] - a12[i] * a12[i];
-        float c2 = a00[i] + a11[i] + a22[i];
+            i_a00 * i_a11 - i_a01 * i_a01 + i_a00 * i_a22 - i_a02 * i_a02 + i_a11 * i_a22 - i_a12 * i_a12;
+        float c2 = i_a00 + i_a11 + i_a22;
         float c2Div3 = c2 * inv3;
         float aDiv3 = (c1 - c2 * c2Div3) * inv3;
 
@@ -129,8 +208,8 @@ DLL_LOCAL void fname(const float *a00, const float *a01, const float *a02, const
         if (r1 < r2)
             swap(&r1, &r2);
 
-        ev0[i] = r0;
-        ev1[i] = r1;
-        ev2[i] = r2;
+        ev0[i] = r0 * maxElement;
+        ev1[i] = r1 * maxElement;
+        ev2[i] = r2 * maxElement;
     }
 }

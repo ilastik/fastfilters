@@ -25,6 +25,11 @@
 #include <string>
 #include <stdlib.h>
 
+#if defined(_MSC_VER)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 namespace py = pybind11;
 
 namespace
@@ -73,8 +78,10 @@ py::array_t<float> linalg_ev2d(py::array_t<float> &mtx)
     if (info.shape[0] != 3)
         throw std::runtime_error("1st dimension must have len = 3.");
 
+    ssize_t l0[2] = {2, info.shape[1]};
+    size_t l1[2] = {sizeof(float) * info.shape[1], sizeof(float)};
     auto result = py::array(py::buffer_info(nullptr, sizeof(float), py::format_descriptor<float>::value, 2,
-                                            {2, info.shape[1]}, {sizeof(float) * info.shape[1], sizeof(float)}));
+                                            l0, l1));
     py::buffer_info info_out = result.request();
 
     float *inptr = (float *)info.ptr;
@@ -219,7 +226,7 @@ struct ConvolveBase {
 
     void set_window_ratio(double ratio)
     {
-        opt.window_ratio = ratio;
+        opt.window_ratio = (float)ratio;
     }
 };
 
@@ -543,11 +550,32 @@ template <typename ConvolveFunctor, typename... args> void bind2d3d_ev(py::modul
 }
 };
 
-PYBIND11_PLUGIN(core)
+#if PY_MAJOR_VERSION < 3
+extern "C" {
+static void *PyMem_SafeMalloc(size_t n)
 {
-    py::module m_fastfilters("core", "fast gaussian kernel and derivative filters");
+    py::gil_scoped_acquire acquire;
+    return PyMem_Malloc(n);
+}
 
-    fastfilters_init_ex(PyMem_Malloc, PyMem_Free);
+static void PyMem_SafeFree(void *p)
+{
+    py::gil_scoped_acquire acquire;
+    PyMem_Free(p);
+}
+}
+#endif
+
+PYBIND11_MODULE(core, m_fastfilters)
+{
+
+    m_fastfilters.doc() = "fast gaussian kernel and derivative filters";
+
+#if PY_MAJOR_VERSION >= 3
+    fastfilters_init_ex(PyMem_RawMalloc, PyMem_RawFree);
+#else
+    fastfilters_init_ex(PyMem_SafeMalloc, PyMem_SafeFree);
+#endif
 
     m_fastfilters.attr("__version__") = pybind11::str(FF_VERSION_STR);
 
@@ -566,6 +594,4 @@ PYBIND11_PLUGIN(core)
 
     bind2d3d_ev<ConvolveHessian, double>(m_fastfilters, "hog");
     bind2d3d_ev<ConvolveST, double, double>(m_fastfilters, "st");
-
-    return m_fastfilters.ptr();
 }

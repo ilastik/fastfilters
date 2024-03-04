@@ -32,6 +32,7 @@ static fir_convolve_fn_t g_convolve_outer = NULL;
 
 void fastfilters_fir_init(void)
 {
+    #ifndef _USE_SIMDE_ON_ARM_
     if (fastfilters_cpu_check(FASTFILTERS_CPU_FMA)) {
         g_convolve_outer = &fastfilters_fir_convolve_fir_outer_avxfma;
         g_convolve_inner = &fastfilters_fir_convolve_fir_inner_avxfma;
@@ -42,6 +43,10 @@ void fastfilters_fir_init(void)
         g_convolve_outer = &fastfilters_fir_convolve_fir_outer;
         g_convolve_inner = &fastfilters_fir_convolve_fir_inner;
     }
+    #else
+        g_convolve_outer = &fastfilters_fir_convolve_fir_outer_avxfma;
+        g_convolve_inner = &fastfilters_fir_convolve_fir_inner_avxfma;
+    #endif
 }
 
 bool DLL_PUBLIC fastfilters_fir_convolve2d(const fastfilters_array2d_t *inarray, const fastfilters_kernel_fir_t kernelx,

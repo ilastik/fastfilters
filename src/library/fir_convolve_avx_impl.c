@@ -24,7 +24,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+
+#ifdef _USE_SIMDE_ON_ARM_
+#include <simde/x86/avx512.h>
+#else
 #include <immintrin.h>
+#endif
 
 #ifndef __FMA__
 #define _mm256_fmadd_ps(a, b, c) (_mm256_add_ps(_mm256_mul_ps((a), (b)), (c)))
@@ -321,7 +326,7 @@ bool DLL_LOCAL fname(0, param_boundary_left, param_boundary_right, param_symm, p
     const unsigned int avx_end_single = (n_pixels) & ~7;
 #else
     const unsigned int avx_end = (n_pixels - FF_KERNEL_LEN) & ~31;
-    const unsigned int avx_end_single = (n_pixels - FF_KERNEL_LEN) & ~7;
+    const unsigned int avx_end_single = (avx_end) & ~7;
 #endif
 
     if (pixel_stride != 1)
@@ -379,9 +384,10 @@ bool DLL_LOCAL fname(0, param_boundary_left, param_boundary_right, param_symm, p
         }
 #endif
 
-        if (likely(avx_end_single > 32)) {
+        const unsigned int x_align = (x + 7) & ~7;
+        const unsigned int x_align2 = (x_align + 31) & ~31;
+        if (likely(avx_end_single > x_align2)) {
             // align to 8 pixel boundary
-            const unsigned int x_align = (x + 7) & ~7;
             for (; x < x_align; ++x) {
                 float sum = kernel->coefs[0] * cur_input[x];
 
@@ -393,7 +399,7 @@ bool DLL_LOCAL fname(0, param_boundary_left, param_boundary_right, param_symm, p
             }
 
             // align to 32 pixel boundary
-            for (; x < 32; x += 8) {
+            for (; x < x_align2; x += 8) {
                 __m256 result = _mm256_loadu_ps(cur_input + x);
                 __m256 kernel_val = _mm256_broadcast_ss(&kernel->coefs[0]);
 
@@ -458,7 +464,7 @@ bool DLL_LOCAL fname(0, param_boundary_left, param_boundary_right, param_symm, p
             }
 
             // align until we have to switch to non-SIMD
-            for (; x < avx_end_single; x += 8) {
+            while (x < avx_end_single) {
                 __m256 result = _mm256_loadu_ps(cur_input + x);
                 __m256 kernel_val = _mm256_broadcast_ss(&kernel->coefs[0]);
 
@@ -472,6 +478,7 @@ bool DLL_LOCAL fname(0, param_boundary_left, param_boundary_right, param_symm, p
                 }
 
                 _mm256_storeu_ps(cur_output + x, result);
+                x += 8;
             }
         }
 // finish pixels until boundary
@@ -508,7 +515,8 @@ bool DLL_LOCAL fname(0, param_boundary_left, param_boundary_right, param_symm, p
                     right = cur_input[x + k];
 
                 // FIXME: ptr
-                if (unlikely(-(int)k + (int)x < 0))
+                if (unlikely(x < k))
+                    // if (unlikely(((int)x -(int)k) < 0))
                     left = *(cur_input + k - x);
                 else
                     left = *(cur_input + x - k);
