@@ -53,10 +53,6 @@ if(WITH_OFAST)
   endif()
 endif()
 
-if (APPLE_ARM64)
- set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -mfloat-abi=hard")
-endif()
-
 check_cxx_compiler_flag("-Wall" HAS_WALL_FLAG)
 check_cxx_compiler_flag("-Wextra" HAS_WEXTRA_FLAG)
 
