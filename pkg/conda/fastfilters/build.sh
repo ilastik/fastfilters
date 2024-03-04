@@ -4,7 +4,7 @@ cd build_conda
 
 EXTRA_CMAKE_ARGS=""
 if [[ `uname` == 'Darwin' ]] && [[ ${ARCH} == 'arm64' ]]; then
-        EXTRA_CMAKE_ARGS="-DUSE_SIMDE_ON_ARM=ON -DAPPLE_ARM64=ON"
+        EXTRA_CMAKE_ARGS="-DUSE_SIMDE_ON_ARM=ON"
 fi
 
 cmake \
