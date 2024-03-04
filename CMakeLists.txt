@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8.8)
+cmake_minimum_required (VERSION 3.10.0)
 project (fastfilters)
 
 include(GetGitRevisionDescription.cmake)
@@ -11,7 +11,6 @@ OPTION(WITH_OFAST "Use -Ofast optimizations \(on linux\)" OFF)
 set(FF_UNROLL 10)
 
 add_definitions(-DFF_UNROLL=${FF_UNROLL})
-include("pybind11/tools/FindPythonLibsNew.cmake")
 
 include(CheckCCompilerFlag)
 check_c_compiler_flag("-std=c99" HAS_C99_FLAG)
@@ -33,6 +32,8 @@ if(NOT CAN_COMPILE_C99_FEAT)
   message(FATAL_ERROR "Unsupported compiler - fastfilters requires some C99 features!")
 endif()
 
+find_package(pybind11)
+
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-Ofast" HAS_OFAST_FLAG)
 check_cxx_compiler_flag("-O3" HAS_O2_FLAG)
@@ -52,6 +53,9 @@ if(WITH_OFAST)
   endif()
 endif()
 
+if (APPLE_ARM64)
+ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -mfloat-abi=hard")
+endif()
 
 check_cxx_compiler_flag("-Wall" HAS_WALL_FLAG)
 check_cxx_compiler_flag("-Wextra" HAS_WEXTRA_FLAG)
@@ -69,37 +73,6 @@ endif()
 check_cxx_compiler_flag("-std=c++14" HAS_CPP14_FLAG)
 check_cxx_compiler_flag("-std=c++11" HAS_CPP11_FLAG)
 
-check_cxx_compiler_flag("-mavx" HAS_AVX_FLAG)
-check_cxx_compiler_flag("-mavx2" HAS_AVX2_FLAG)
-check_cxx_compiler_flag("-mfma" HAS_FMA_FLAG)
-
-check_cxx_compiler_flag("/arch:AVX" HAS_ARCH_AVX_FLAG)
-check_cxx_compiler_flag("/arch:AVX2" HAS_ARCH_AVX2_FLAG)
-
-if (HAS_AVX_FLAG)
-  set(AVX_FLAG "-mavx")
-elseif(HAS_ARCH_AVX_FLAG)
-  set(AVX_FLAG "/arch:AVX -D__AVX__=1")
-else()
-  set(AVX_FLAG "")
-endif()
-
-if (HAS_AVX2_FLAG)
-  set(AVX2_FLAG "-mavx2")
-elseif(HAS_ARCH_AVX2_FLAG)
-  set(AVX2_FLAG "/arch:AVX2 -D__AVX__=1 -D__FMA__=1 -D__AVX2__=1")
-else()
-  set(AVX2_FLAG "")
-endif()
-
-if (HAS_FMA_FLAG)
-  set(FMA_FLAG "-mfma")
-elseif(HAS_ARCH_AVX2_FLAG)
-  set(FMA_FLAG "/arch:AVX -D__AVX__=1 -D__FMA__=1")
-else()
-  set(FMA_FLAG "")
-endif()
-
 if (HAS_CPP14_FLAG)
   set(PYBIND11_CPP_STANDARD -std=c++14)
 elseif (HAS_CPP11_FLAG)
@@ -109,6 +82,51 @@ else()
     message(FATAL_ERROR "Unsupported compiler -- pybind11 requires C++11 support!")
   endif()
 endif()
+
+if (USE_SIMDE_ON_ARM)
+  set(HAS_AVX_FLAG "1")
+  set(HAS_AVX2_FLAG "1")
+  set(HAS_FMA_FLAG "1")
+  set(HAS_ARCH_AVX_FLAG "1")
+  set(HAS_ARCH_AVX2_FLAG "1")
+  set(AVX_FLAG "-D__AVX__=1")
+  set(AVX2_FLAG "-D__AVX__=1 -D__FMA__=1 -D__AVX2__=1")
+  set(FMA_FLAG "-D__AVX__=1 -D__FMA__=1")
+  add_definitions(-D_USE_SIMDE_ON_ARM_)
+
+else()
+  check_cxx_compiler_flag("-mavx" HAS_AVX_FLAG)
+  check_cxx_compiler_flag("-mavx2" HAS_AVX2_FLAG)
+  check_cxx_compiler_flag("-mfma" HAS_FMA_FLAG)
+
+  check_cxx_compiler_flag("/arch:AVX" HAS_ARCH_AVX_FLAG)
+  check_cxx_compiler_flag("/arch:AVX2" HAS_ARCH_AVX2_FLAG)
+
+  if (HAS_AVX_FLAG)
+    set(AVX_FLAG "-mavx")
+  elseif(HAS_ARCH_AVX_FLAG)
+    set(AVX_FLAG "/arch:AVX -D__AVX__=1")
+  else()
+    set(AVX_FLAG "")
+  endif()
+
+  if (HAS_AVX2_FLAG)
+    set(AVX2_FLAG "-mavx2")
+  elseif(HAS_ARCH_AVX2_FLAG)
+    set(AVX2_FLAG "/arch:AVX2 -D__AVX__=1 -D__FMA__=1 -D__AVX2__=1")
+  else()
+    set(AVX2_FLAG "")
+  endif()
+
+  if (HAS_FMA_FLAG)
+    set(FMA_FLAG "-mfma")
+  elseif(HAS_ARCH_AVX2_FLAG)
+    set(FMA_FLAG "/arch:AVX -D__AVX__=1 -D__FMA__=1")
+  else()
+    set(FMA_FLAG "")
+  endif()
+endif()
+
 set(PYBIND11_CPP_STANDARD ${PYBIND11_CPP_STANDARD} CACHE STRING
     "C++ standard flag, e.g. -std=c++11 or -std=c++14. Defaults to latest available.")
 
@@ -119,7 +137,6 @@ if (MSVC) #disable specific VS warnings
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${disabled_warnings}")
 endif()
 
-set(PYBIND11_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/include" CACHE INTERNAL "")
 set(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} CACHE INTERNAL "")
 set(PYTHON_LIBRARIES ${PYTHON_LIBRARIES} CACHE INTERNAL "")
 set(PYTHON_MODULE_PREFIX ${PYTHON_MODULE_PREFIX} CACHE INTERNAL "")
@@ -130,7 +147,7 @@ set(PYTHON_MODULE_EXTENSION ${PYTHON_MODULE_EXTENSION} CACHE INTERNAL "")
 #
 function(pybind11_add_module target_name)
   add_library(${target_name} MODULE ${ARGN})
-  target_include_directories(${target_name} PUBLIC ${PYBIND11_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS})
+  target_include_directories(${target_name} PUBLIC ${pybind11_INCLUDE_DIR} ${PYTHON_INCLUDE_DIRS})
 
   # The prefix and extension are provided by FindPythonLibsNew.cmake
   set_target_properties(${target_name} PROPERTIES PREFIX "${PYTHON_MODULE_PREFIX}")
@@ -220,124 +237,135 @@ endfunction()
 
 include(CheckCXXSourceCompiles)
 
-set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG}")
-
-check_cxx_source_compiles( "#include <immintrin.h>
-#include <stdlib.h>
-#include <stdio.h>
-int main()
-{
-    __m256 a = _mm256_set1_ps(rand());
-    __m256 b = _mm256_set1_ps(rand());
-    b = _mm256_add_ps(a, b);
-    float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
-    printf(\"%f\", result);
-    return 0;
-} " CAN_COMPILE_AVX)
-
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
-
-set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG} ${FMA_FLAG}")
-
-check_cxx_source_compiles( "#include <immintrin.h>
-#include <stdlib.h>
-#include <stdio.h>
-int main()
-{
-    __m256 a = _mm256_set1_ps(rand());
-    __m256 b = _mm256_set1_ps(rand());
-    b = _mm256_fmadd_ps(a, a, b);
-    float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
-    printf(\"%f\", result);
-    return 0;
-} " CAN_COMPILE_FMA)
-
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
-
-set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX2_FLAG}")
-
-check_cxx_source_compiles( "
-    #include <immintrin.h>
-    #include <stdlib.h>
-    #include <stdio.h>
-    int main()
-    {
-    float test = 1.0;
-    __m128 a = _mm_setzero_ps();
-    __m256 b = _mm256_broadcastss_ps(a);
-    float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
-    printf(\"%f\", result);
-    return 0;
-    }" CAN_COMPILE_AVX2)
-
-set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
-
-function(check_cpu_supports flagname defname)
-    check_cxx_source_compiles( "#include <stdio.h> \n int main() { return __builtin_cpu_supports(\"${flagname}\"); }" ${defname})
-endfunction()
-
-check_cpu_supports("avx" "HAVE_GNU_CPU_SUPPORTS_AVX")
-check_cpu_supports("avx2" "HAVE_GNU_CPU_SUPPORTS_AVX2")
-check_cpu_supports("fma" "HAVE_GNU_CPU_SUPPORTS_FMA")
+if(USE_SIMDE_ON_ARM)
+  # currently this has no effect, as all the checks, like check_cxx_source_compiles
+  # are not run for targets that use SIMDE
+  set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES} ${PROJECT_SOURCE_DIR}/simde")
+  set(CMAKE_REQUIRED_DEFINITIONS "${CMAKE_REQUIRED_DEFINITIONS} -DSIMDE_ENABLE_NATIVE_ALIASES")
+endif()
 
 
-check_cxx_source_compiles( "
-    #include <stdio.h>
-    int main()
-    {
-        unsigned int a, b, c, d;
+if (NOT USE_SIMDE_ON_ARM)
 
-        a = 1;
-        c = 0;
-        __asm__ __volatile__ (\"cpuid\" : \"+a\"(a), \"+b\"(b), \"+c\"(c), \"=d\"(d));
-        return a;
-    }" HAVE_ASM_CPUID)
+  set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG}")
+  check_cxx_source_compiles( "#include <immintrin.h>
+  #include <stdlib.h>
+  #include <stdio.h>
+  int main()
+  {
+      __m256 a = _mm256_set1_ps(rand());
+      __m256 b = _mm256_set1_ps(rand());
+      b = _mm256_add_ps(a, b);
+      float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
+      printf(\"%f\", result);
+      return 0;
+  } " CAN_COMPILE_AVX)
 
-check_cxx_source_compiles("
-    #include <stdio.h>
-    #include <intrin.h>
-    int main()
-    {
-        int cpuid[4];
-        __cpuidex(cpuid, 7, 0);
-        return cpuid[0];
-    }" HAVE_CPUIDEX)
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
 
-check_cxx_source_compiles("
-    #include <stdio.h>
-    #include <intrin.h>
-    int main()
-    {
-        unsigned int xcr0 = _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
-        return xcr0;
-    }" HAVE_INTRIN_XGETBV)
+  set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX_FLAG} ${FMA_FLAG}")
+  check_cxx_source_compiles( "#include <immintrin.h>
+  #include <stdlib.h>
+  #include <stdio.h>
+  int main()
+  {
+      __m256 a = _mm256_set1_ps(rand());
+      __m256 b = _mm256_set1_ps(rand());
+      b = _mm256_fmadd_ps(a, a, b);
+      float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
+      printf(\"%f\", result);
+      return 0;
+  } " CAN_COMPILE_FMA)
+
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
+
+  set(CMAKE_REQUIRED_FLAGS_OLD "${CMAKE_REQUIRED_FLAGS}")
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_CXX_FLAGS} ${AVX2_FLAG}")
+  check_cxx_source_compiles( "
+      #include <immintrin.h>
+      #include <stdlib.h>
+      #include <stdio.h>
+      int main()
+      {
+      float test = 1.0;
+      __m128 a = _mm_setzero_ps();
+      __m256 b = _mm256_broadcastss_ps(a);
+      float result = _mm_cvtss_f32(_mm256_extractf128_ps(b, 0));
+      printf(\"%f\", result);
+      return 0;
+      }" CAN_COMPILE_AVX2)
+
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS_OLD}")
+
+  function(check_cpu_supports flagname defname)
+      check_cxx_source_compiles( "#include <stdio.h> \n int main() { return __builtin_cpu_supports(\"${flagname}\"); }" ${defname})
+  endfunction()
+
+  check_cpu_supports("avx" "HAVE_GNU_CPU_SUPPORTS_AVX")
+  check_cpu_supports("avx2" "HAVE_GNU_CPU_SUPPORTS_AVX2")
+  check_cpu_supports("fma" "HAVE_GNU_CPU_SUPPORTS_FMA")
 
 
+  check_cxx_source_compiles( "
+      #include <stdio.h>
+      int main()
+      {
+          unsigned int a, b, c, d;
 
-check_cxx_source_compiles( "
-    #include <stdio.h>
-    int main()
-    {
-        unsigned int a, b, c;
+          a = 1;
+          c = 0;
+          __asm__ __volatile__ (\"cpuid\" : \"+a\"(a), \"+b\"(b), \"+c\"(c), \"=d\"(d));
+          return a;
+      }" HAVE_ASM_CPUID)
 
-        c = 0;
-        __asm__ __volatile__(\"xgetbv\" : \"=a\"(a), \"=d\"(b) : \"c\"(c));
-        return a;
-    }" HAVE_ASM_XGETBV)
+  check_cxx_source_compiles("
+      #include <stdio.h>
+      #include <intrin.h>
+      int main()
+      {
+          int cpuid[4];
+          __cpuidex(cpuid, 7, 0);
+          return cpuid[0];
+      }" HAVE_CPUIDEX)
 
-check_cxx_source_compiles( "
-        #include <stdbool.h>
-        int main(int argc, char *argv[])
-        {
-            (void)argv;
-            return __builtin_expect(argc > 2, false);
-        }" HAVE_BUILTIN_EXPECT)
+  check_cxx_source_compiles("
+      #include <stdio.h>
+      #include <intrin.h>
+      int main()
+      {
+          unsigned int xcr0 = _xgetbv(_XCR_XFEATURE_ENABLED_MASK);
+          return xcr0;
+      }" HAVE_INTRIN_XGETBV)
 
-include(CheckIncludeFiles)
-check_include_files(cpuid.h HAVE_CPUID_H)
+  check_cxx_source_compiles( "
+      #include <stdio.h>
+      int main()
+      {
+          unsigned int a, b, c;
+
+          c = 0;
+          __asm__ __volatile__(\"xgetbv\" : \"=a\"(a), \"=d\"(b) : \"c\"(c));
+          return a;
+      }" HAVE_ASM_XGETBV)
+
+  check_cxx_source_compiles( "
+          #include <stdbool.h>
+          int main(int argc, char *argv[])
+          {
+              (void)argv;
+              return __builtin_expect(argc > 2, false);
+          }" HAVE_BUILTIN_EXPECT)
+
+  include(CheckIncludeFiles)
+  check_include_files(cpuid.h HAVE_CPUID_H)
+else()
+  set(CAN_COMPILE_AVX "1")
+  set(CAN_COMPILE_FMA "1")
+  set(CAN_COMPILE_AVX2 "1")
+endif()
+
 
 if(NOT CAN_COMPILE_AVX)
     message( FATAL_ERROR "Compiler cannot emit avx instructions.")
@@ -356,52 +384,63 @@ configure_file (
 
 include_directories("${PROJECT_SOURCE_DIR}/src/library/")
 include_directories("${PROJECT_SOURCE_DIR}/include")
-include_directories("${PROJECT_SOURCE_DIR}/pybind11/include")
+if(USE_SIMDE_ON_ARM)
+  include_directories("${PROJECT_SOURCE_DIR}/simde")
+  add_definitions(-DSIMDE_ENABLE_NATIVE_ALIASES=1)
+endif()
 include_directories("${PROJECT_SOURCE_DIR}/boost-preprocessor/include")
 include_directories("${PROJECT_BINARY_DIR}")
 
-configure_file(${PROJECT_SOURCE_DIR}/src/library/linalg_avx2.c ${PROJECT_BINARY_DIR}/linalg_avx2.avx.c COPYONLY)
-configure_file(${PROJECT_SOURCE_DIR}/src/library/linalg_avx2.c ${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c COPYONLY)
+if (NOT USE_SIMDE_ON_ARM)
+  configure_file(${PROJECT_SOURCE_DIR}/src/library/linalg_avx2.c ${PROJECT_BINARY_DIR}/linalg_avx2.avx.c COPYONLY)
+  set_source_files_properties(${PROJECT_BINARY_DIR}/linalg_avx2.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
+  configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c COPYONLY)
+  set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
+endif()
 
+configure_file(${PROJECT_SOURCE_DIR}/src/library/linalg_avx2.c ${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c COPYONLY)
 set_source_files_properties(${PROJECT_SOURCE_DIR}/src/library/linalg_avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
-set_source_files_properties(${PROJECT_BINARY_DIR}/linalg_avx2.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
 set_source_files_properties(${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c PROPERTIES COMPILE_FLAGS "${AVX2_FLAG} ${OFAST_FLAG}")
 
-configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c COPYONLY)
 configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avxfma.c COPYONLY)
-
-set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG}")
 set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx.avxfma.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${FMA_FLAG} ${OFAST_FLAG}")
 
 set(number ${FF_UNROLL})
 set(copied_files "")
 while( number GREATER 0 )
-  configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx_impl.c ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c COPYONLY)
-  set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG} -DFF_KERNEL_LEN=${number}")
-
   configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx_impl.c ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avxfma.c COPYONLY)
   set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avxfma.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG} ${FMA_FLAG} -DFF_KERNEL_LEN=${number}")
+  set(copied_files ${copied_files} ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avxfma.c)
 
-  set(copied_files ${copied_files} ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avxfma.c)
-
+  if (NOT USE_SIMDE_ON_ARM)
+    configure_file(${PROJECT_SOURCE_DIR}/src/library/fir_convolve_avx_impl.c ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c COPYONLY)
+    set_source_files_properties(${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c PROPERTIES COMPILE_FLAGS "${AVX_FLAG} ${OFAST_FLAG} -DFF_KERNEL_LEN=${number}")
+    set(copied_files ${copied_files} ${PROJECT_BINARY_DIR}/fir_convolve_avx_impl.${number}.avx.c)
+  endif()
   math( EXPR number "${number} - 1" ) # decrement number
 endwhile( number GREATER 0 )
 
+# exclude the avx versions for ARM builds, there we only need the avx ones.
+set(avx_files ${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avxfma.c)
+if (NOT USE_SIMDE_ON_ARM)
+  set(avx_files ${avx_files} ${PROJECT_BINARY_DIR}/linalg_avx2.avx.c src/library/linalg_avx.c ${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c)
+  configure_file(${PROJECT_SOURCE_DIR}/src/library/cpu_intel.c ${PROJECT_BINARY_DIR}/cpu.c COPYONLY)
+else()
+  configure_file(${PROJECT_SOURCE_DIR}/src/library/cpu_arm.c ${PROJECT_BINARY_DIR}/cpu.c COPYONLY)
+endif()
+
 add_library(fastfilters SHARED src/library/array.c
-src/library/cpu.c
+${PROJECT_BINARY_DIR}/cpu.c
 src/library/dummy.c
 src/library/fastfilters.c
 src/library/fir_convolve.c
 src/library/fir_convolve_nosimd.c
 src/library/fir_filters.c
 src/library/fir_kernel.c
-${PROJECT_BINARY_DIR}/linalg_avx2.avx.c
-${PROJECT_BINARY_DIR}/linalg_avx2.avx2.c
 src/library/linalg_avx.c
 src/library/linalg.c
 src/library/memory.c
-${PROJECT_BINARY_DIR}/fir_convolve_avx.avx.c
-${PROJECT_BINARY_DIR}/fir_convolve_avx.avxfma.c
+${avx_files}
 ${copied_files})
 
 target_compile_definitions(fastfilters PRIVATE FASTFILTERS_SHARED_LIBRARY)

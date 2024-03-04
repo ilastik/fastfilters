@@ -245,6 +245,7 @@ static combine_add3_fn_t g_combine_addsqrt3 = NULL;
 
 void fastfilters_linalg_init()
 {
+    #ifndef _USE_SIMDE_ON_ARM_
     if (fastfilters_cpu_check(FASTFILTERS_CPU_AVX)) {
         g_combine_add = _combine_add_avx;
         g_combine_add3 = _combine_add3_avx;
@@ -268,6 +269,15 @@ void fastfilters_linalg_init()
     } else {
         g_ev3d_fn = _ev3d_default;
     }
+    #else
+        g_combine_add = _combine_add_avx;
+        g_combine_add3 = _combine_add3_avx;
+        g_combine_mul = _combine_mul_avx;
+        g_combine_addsqrt = _combine_addsqrt_avx;
+        g_combine_addsqrt3 = _combine_addsqrt3_avx;
+        g_ev2d_fn = _ev2d_avx;
+        g_ev3d_fn = _ev3d_avx2;
+    #endif
 }
 
 void DLL_PUBLIC fastfilters_linalg_ev3d(const float *a00, const float *a01, const float *a02, const float *a11,

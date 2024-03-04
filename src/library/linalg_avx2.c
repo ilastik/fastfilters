@@ -20,7 +20,11 @@
 #include "common.h"
 #include "avx_mathfun.h"
 
+#ifdef _USE_SIMDE_ON_ARM_
+#include <simde/x86/avx512.h>
+#else
 #include <immintrin.h>
+#endif
 
 static inline void swap(float *a, float *b)
 {
@@ -37,13 +41,16 @@ static inline float max(float a, float b)
         return b;
 }
 
-
+#ifdef _USE_SIMDE_ON_ARM_
+#define fname _ev3d_avx2
+#else
 #ifdef __AVX2__
 #define fname _ev3d_avx2
 #elif defined(__AVX__)
 #define fname _ev3d_avx
 #else
 #error "linalg_avx2.c needs to be compiled with avx or avx2 support"
+#endif
 #endif
 
 static inline __m256 _mm256_abs_ps(__m256 x)
