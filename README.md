@@ -1,7 +1,15 @@
+Originally developed by [Sven Peter](https://github.com/svenpeter42), now maintained by the [ilastik team](https://github.com/ilastik)
 
-master: [![Build Status](https://travis-ci.org/svenpeter42/fastfilters.svg?branch=master)](https://travis-ci.org/svenpeter42/fastfilters) [![Build status](https://ci.appveyor.com/api/projects/status/obc03rs0cwisnsdv/branch/master?svg=true)](https://ci.appveyor.com/project/svenpeter42/fastfilters/branch/master)
+[![conda-version](https://anaconda.org/ilastik-forge/fastfilters/badges/version.svg)](https://anaconda.org/ilastik-forge/fastfilters)
+[![conda-updated](https://anaconda.org/ilastik-forge/fastfilters/badges/latest_release_date.svg)](https://anaconda.org/ilastik-forge/fastfilters)
+[![conda-platforms](https://anaconda.org/ilastik-forge/fastfilters/badges/platforms.svg)](https://anaconda.org/ilastik-forge/fastfilters)
+[![conda-dl](https://anaconda.org/ilastik-forge/fastfilters/badges/downloads.svg)](https://anaconda.org/ilastik-forge/fastfilters)
 
-devel: [![Build Status](https://travis-ci.org/svenpeter42/fastfilters.svg?branch=devel)](https://travis-ci.org/svenpeter42/fastfilters) [![Build status](https://ci.appveyor.com/api/projects/status/obc03rs0cwisnsdv/branch/master?svg=true)](https://ci.appveyor.com/project/svenpeter42/fastfilters/branch/devel)
+Build status:
+
+main: [![test](https://github.com/ilastik/fastfilters/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/ilastik/fastfilters/actions/workflows/test.yml)
+
+devel: [![test](https://github.com/ilastik/fastfilters/actions/workflows/test.yml/badge.svg?branch=devel)](https://github.com/ilastik/fastfilters/actions/workflows/test.yml)
 
 Installation (stable)
 ------------
@@ -17,10 +25,10 @@ Installation (stable)
 Conda Installation (stable)
 ------------
 
-	% conda install -c ilastik fastfilters
+	% conda install -c ilastik-forge -c conda-forge fastfilters
 
 
-Gentoo Installation (development)
+Gentoo Installation (development) (**not maintained**)
 ------------
 
 	% git clone https://github.com/svenpeter42/fastfilters.git
