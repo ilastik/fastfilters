@@ -34,3 +34,10 @@ Gentoo Installation (development) (**not maintained**)
 	% git clone https://github.com/svenpeter42/fastfilters.git
 	% cd fastfilters/pkg/gentoo/sci-libs/fastfilters
 	% sudo ebuild fastfilters-9999.ebuild manifest clean merge
+
+Installation from source
+------------
+	cmake -DFF_INSTALL_DIR="lib/python3.x/site-packages/" -DPYTHON_EXECUTABLE="/bin/python"
+	make
+	make install
+	+ update 'PYTHONPATH': 'lib/python3.x/site-packages'
