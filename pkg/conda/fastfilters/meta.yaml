@@ -35,7 +35,7 @@ requirements:
 test:
   requires:
     - vigra
-    - nose
+    - pytest
 
   source_files:
     - tests
@@ -44,8 +44,8 @@ test:
     - fastfilters
 
   commands:
-    - cd tests && touch set_paths.py && nosetests  # [not win]
-    - cd tests && echo "" > set_paths.py && nosetests  # [win]
+    - cd tests && touch set_paths.py && pytest -v  # [not win]
+    - cd tests && echo "" > set_paths.py && pytest -v  # [win]
 
 about:
   author: Sven Peter (svenpeter42)

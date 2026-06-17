@@ -3,10 +3,9 @@ MACOSX_DEPLOYMENT_TARGET:      # [osx]
   - 10.9                       # [osx and x86_64]
 
 python:
-  - 3.9
-  - 3.10
   - 3.11
-
+  - 3.12
+  - 3.13
 pin_run_as_build:
   python: x.x
 
