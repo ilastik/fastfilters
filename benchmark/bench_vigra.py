@@ -6,11 +6,11 @@ import time
 
 class Timer(object):
 	def __enter__(self):
-		self.a = time.clock()
+		self.a = time.perf_counter()
 		return self
 
 	def __exit__(self, *args):
-		self.b = time.clock()
+		self.b = time.perf_counter()
 		self.delta = self.b - self.a
 
 a = np.zeros((5000,5000)).astype(np.float32)
